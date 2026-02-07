@@ -295,6 +295,10 @@ export class SingleSessionHTTPServer {
     if (this.sessionMetadata[sessionId]) {
       this.sessionMetadata[sessionId].lastAccess = new Date();
     }
+    // Add support for legacy SSE session
+    if (this.session && this.session.sessionId === sessionId) {
+      this.session.lastAccess = new Date();
+    }
   }
 
   /**
@@ -1303,6 +1307,13 @@ export class SingleSessionHTTPServer {
           sessionId: instanceContext.sessionId ? instanceContext.sessionId.substring(0, 8) + '...' : undefined,
           urlDomain: instanceContext.n8nApiUrl ? new URL(instanceContext.n8nApiUrl).hostname : undefined
         });
+      }
+
+      // Route to SSE transport if active session exists (support for official n8n MCP Client)
+      if (this.session?.isSSE && this.session.transport instanceof SSEServerTransport) {
+        this.updateSessionAccess(this.session.sessionId);
+        await this.session.transport.handlePostMessage(req, res);
+        return;
       }
 
       await this.handleRequest(req, res, instanceContext);

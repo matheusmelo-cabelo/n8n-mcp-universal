@@ -477,11 +477,10 @@ Deploy n8n-MCP to Railway's cloud platform with zero configuration:
 
 ## 🔧 n8n Integration
 
-Want to use n8n-MCP with your n8n instance? Check out our comprehensive [n8n Deployment Guide](./docs/N8N_DEPLOYMENT.md) for:
-- Local testing with the MCP Client Tool node
-- Production deployment with Docker Compose
-- Cloud deployment on Hetzner, AWS, and other providers
-- Troubleshooting and security best practices
+Want to use n8n-MCP with your n8n instance? Check out our comprehensive guides:
+- [Official n8n MCP Client Guide](./docs/N8N_OFFICIAL_MCP_GUIDE.md) - Recommended for n8n native nodes
+- [n8n Deployment Guide](./docs/N8N_DEPLOYMENT.md) - Docker, Cloud, and advanced setups
+- [HTTP Streamable Setup](./N8N_HTTP_STREAMABLE_SETUP.md) - Legacy community node setup
 
 ## 💻 Connect your IDE
 
