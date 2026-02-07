@@ -1,19 +1,28 @@
-# n8n-MCP
+# n8n-MCP Universal
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub stars](https://img.shields.io/github/stars/czlonkowski/n8n-mcp?style=social)](https://github.com/czlonkowski/n8n-mcp)
 [![npm version](https://img.shields.io/npm/v/n8n-mcp.svg)](https://www.npmjs.com/package/n8n-mcp)
-[![codecov](https://codecov.io/gh/czlonkowski/n8n-mcp/graph/badge.svg?token=YOUR_TOKEN)](https://codecov.io/gh/czlonkowski/n8n-mcp)
-[![Tests](https://img.shields.io/badge/tests-3336%20passing-brightgreen.svg)](https://github.com/czlonkowski/n8n-mcp/actions)
-[![n8n version](https://img.shields.io/badge/n8n-2.4.4-orange.svg)](https://github.com/n8n-io/n8n)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fczlonkowski%2Fn8n--mcp-green.svg)](https://github.com/czlonkowski/n8n-mcp/pkgs/container/n8n-mcp)
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/n8n-mcp?referralCode=n8n-mcp)
 
-A Model Context Protocol (MCP) server that provides AI assistants with comprehensive access to n8n node documentation, properties, and operations. Deploy in minutes to give Claude and other AI assistants deep knowledge about n8n's 1,084 workflow automation nodes (537 core + 547 community).
+**The Universal Model Context Protocol (MCP) Server for n8n.**
+
+This repository is the ultimate toolkit for orchestrating n8n workflows with ANY AI assistant. It unifies support for:
+- 🟣 **n8n Native MCP Client** (via Standard SSE)
+- 🟠 **Claude Desktop & Code**
+- 🔵 **Gemini CLI & Antigravity**
+- 🟢 **Cursor, Windsurf & VS Code**
+
+Deploy in minutes to give your AI assistants deep knowledge about n8n's 1,000+ nodes and full workflow control.
+
+## 🌟 Universal Features
+
+- **✅ Official n8n Support**: Native integration with n8n v1.76+ via SSE.
+- **✅ Gemini Expert Skills**: Includes specialized skills for Gemini CLI (see `extras/gemini`).
+- **✅ Robust Architecture**: Hybrid Single-Session architecture supporting both HTTP and Stdio.
+- **✅ Comprehensive Knowledge**: Access to documentation for 1,084 nodes and 2,709 templates.
 
 ## Overview
 
-n8n-MCP serves as a bridge between n8n's workflow automation platform and AI models, enabling them to understand and work with n8n nodes effectively. It provides structured access to:
+n8n-MCP Universal serves as a bridge between n8n's workflow automation platform and AI models. It provides structured access to:
 
 - 📚 **1,084 n8n nodes** - 537 core nodes + 547 community nodes (301 verified)
 - 🔧 **Node properties** - 99% coverage with detailed schemas
