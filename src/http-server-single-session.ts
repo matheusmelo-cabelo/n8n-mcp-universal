@@ -11,6 +11,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { N8NDocumentationMCPServer } from './mcp/server';
 import { ConsoleManager } from './utils/console-manager';
 import { logger } from './utils/logger';
+import { sanitizeHeaders } from './utils/security-utils';
 import { AuthManager } from './utils/auth';
 import { readFileSync } from 'fs';
 import dotenv from 'dotenv';
@@ -914,7 +915,7 @@ export class SingleSessionHTTPServer {
     app.post('/mcp/test', jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
       logger.info('TEST ENDPOINT: Manual test request received', {
         method: req.method,
-        headers: req.headers,
+        headers: sanitizeHeaders(req.headers),
         body: req.body,
         bodyType: typeof req.body,
         bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined'
@@ -1140,7 +1141,7 @@ export class SingleSessionHTTPServer {
     app.post('/mcp', authLimiter, jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
       // Log comprehensive debug info about the request
       logger.info('POST /mcp request received - DETAILED DEBUG', {
-        headers: req.headers,
+        headers: sanitizeHeaders(req.headers),
         readable: req.readable,
         readableEnded: req.readableEnded,
         complete: req.complete,

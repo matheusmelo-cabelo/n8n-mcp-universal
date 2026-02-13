@@ -12,6 +12,7 @@ const sse_js_1 = require("@modelcontextprotocol/sdk/server/sse.js");
 const server_1 = require("./mcp/server");
 const console_manager_1 = require("./utils/console-manager");
 const logger_1 = require("./utils/logger");
+const security_utils_1 = require("./utils/security-utils");
 const auth_1 = require("./utils/auth");
 const fs_1 = require("fs");
 const dotenv_1 = __importDefault(require("dotenv"));
@@ -22,6 +23,7 @@ const crypto_1 = require("crypto");
 const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
 const protocol_version_1 = require("./utils/protocol-version");
 const instance_context_1 = require("./types/instance-context");
+const shared_database_1 = require("./database/shared-database");
 dotenv_1.default.config();
 const DEFAULT_PROTOCOL_VERSION = protocol_version_1.STANDARD_PROTOCOL_VERSION;
 const MAX_SESSIONS = Math.max(1, parseInt(process.env.N8N_MCP_MAX_SESSIONS || '100', 10));
@@ -52,7 +54,7 @@ class SingleSessionHTTPServer {
         this.contextSwitchLocks = new Map();
         this.session = null;
         this.consoleManager = new console_manager_1.ConsoleManager();
-        this.sessionTimeout = 30 * 60 * 1000;
+        this.sessionTimeout = parseInt(process.env.SESSION_TIMEOUT_MINUTES || '5', 10) * 60 * 1000;
         this.authToken = null;
         this.cleanupTimer = null;
         this.validateEnvironment();
@@ -157,6 +159,9 @@ class SingleSessionHTTPServer {
     updateSessionAccess(sessionId) {
         if (this.sessionMetadata[sessionId]) {
             this.sessionMetadata[sessionId].lastAccess = new Date();
+        }
+        if (this.session && this.session.sessionId === sessionId) {
+            this.session.lastAccess = new Date();
         }
     }
     async switchSessionContext(sessionId, newContext) {
@@ -290,6 +295,25 @@ class SingleSessionHTTPServer {
                         return;
                     }
                     logger_1.logger.info('handleRequest: Creating new transport for initialize request');
+                    if (instanceContext?.instanceId) {
+                        const sessionsToRemove = [];
+                        for (const [existingSessionId, context] of Object.entries(this.sessionContexts)) {
+                            if (context?.instanceId === instanceContext.instanceId) {
+                                sessionsToRemove.push(existingSessionId);
+                            }
+                        }
+                        for (const oldSessionId of sessionsToRemove) {
+                            if (!this.transports[oldSessionId]) {
+                                continue;
+                            }
+                            logger_1.logger.info('Cleaning up previous session for instance', {
+                                instanceId: instanceContext.instanceId,
+                                oldSession: oldSessionId,
+                                reason: 'instance_reconnect'
+                            });
+                            await this.removeSession(oldSessionId, 'instance_reconnect');
+                        }
+                    }
                     let sessionIdToUse;
                     const isMultiTenantEnabled = process.env.ENABLE_MULTI_TENANT === 'true';
                     const sessionStrategy = process.env.MULTI_TENANT_SESSION_STRATEGY || 'instance';
@@ -434,12 +458,21 @@ class SingleSessionHTTPServer {
     }
     async resetSessionSSE(res) {
         if (this.session) {
+            const sessionId = this.session.sessionId;
+            logger_1.logger.info('Closing previous session for SSE', { sessionId });
+            if (this.session.server && typeof this.session.server.close === 'function') {
+                try {
+                    await this.session.server.close();
+                }
+                catch (serverError) {
+                    logger_1.logger.warn('Error closing server for SSE session', { sessionId, error: serverError });
+                }
+            }
             try {
-                logger_1.logger.info('Closing previous session for SSE', { sessionId: this.session.sessionId });
                 await this.session.transport.close();
             }
-            catch (error) {
-                logger_1.logger.warn('Error closing previous session:', error);
+            catch (transportError) {
+                logger_1.logger.warn('Error closing transport for SSE session', { sessionId, error: transportError });
             }
         }
         try {
@@ -580,7 +613,7 @@ class SingleSessionHTTPServer {
         app.post('/mcp/test', jsonParser, async (req, res) => {
             logger_1.logger.info('TEST ENDPOINT: Manual test request received', {
                 method: req.method,
-                headers: req.headers,
+                headers: (0, security_utils_1.sanitizeHeaders)(req.headers),
                 body: req.body,
                 bodyType: typeof req.body,
                 bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined'
@@ -762,7 +795,7 @@ class SingleSessionHTTPServer {
         });
         app.post('/mcp', authLimiter, jsonParser, async (req, res) => {
             logger_1.logger.info('POST /mcp request received - DETAILED DEBUG', {
-                headers: req.headers,
+                headers: (0, security_utils_1.sanitizeHeaders)(req.headers),
                 readable: req.readable,
                 readableEnded: req.readableEnded,
                 complete: req.complete,
@@ -895,6 +928,11 @@ class SingleSessionHTTPServer {
                     urlDomain: instanceContext.n8nApiUrl ? new URL(instanceContext.n8nApiUrl).hostname : undefined
                 });
             }
+            if (this.session?.isSSE && this.session.transport instanceof sse_js_1.SSEServerTransport) {
+                this.updateSessionAccess(this.session.sessionId);
+                await this.session.transport.handlePostMessage(req, res);
+                return;
+            }
             await this.handleRequest(req, res, instanceContext);
             logger_1.logger.info('POST /mcp request completed - checking response status', {
                 responseHeadersSent: res.headersSent,
@@ -1013,6 +1051,13 @@ class SingleSessionHTTPServer {
                     resolve();
                 });
             });
+        }
+        try {
+            await (0, shared_database_1.closeSharedDatabase)();
+            logger_1.logger.info('Shared database closed');
+        }
+        catch (error) {
+            logger_1.logger.warn('Error closing shared database:', error);
         }
         logger_1.logger.info('Single-Session HTTP server shutdown completed');
     }
