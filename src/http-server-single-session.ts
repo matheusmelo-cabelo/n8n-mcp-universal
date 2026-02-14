@@ -27,6 +27,7 @@ import {
 import { InstanceContext, validateInstanceContext } from './types/instance-context';
 import { SessionState } from './types/session-state';
 import { closeSharedDatabase } from './database/shared-database';
+import { sanitizeHeaders, sanitizeBody } from './utils/security-utils';
 
 dotenv.config();
 
@@ -467,16 +468,29 @@ export class SingleSessionHTTPServer {
         const isInitialize = req.body ? isInitializeRequest(req.body) : false;
         
         // Log comprehensive incoming request details for debugging
-        logger.info('handleRequest: Processing MCP request - SDK PATTERN', {
-          requestId: req.get('x-request-id') || 'unknown',
-          sessionId: sessionId,
-          method: req.method,
-          url: req.url,
-          bodyType: typeof req.body,
-          bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined',
-          existingTransports: Object.keys(this.transports),
-          isInitializeRequest: isInitialize
-        });
+        // Wrap logging in try-catch to prevent logging errors from crashing the request
+        try {
+          logger.info('handleRequest: Processing MCP request - SDK PATTERN', {
+            requestId: req.get('x-request-id') || 'unknown',
+            sessionId: sessionId,
+            method: req.method,
+            url: req.url,
+            bodyType: typeof req.body,
+            bodyContent: req.body ? JSON.stringify(sanitizeBody(req.body), null, 2) : 'undefined',
+            existingTransports: Object.keys(this.transports),
+            isInitializeRequest: isInitialize
+          });
+        } catch (logError) {
+          logger.error('Error logging request details:', logError);
+          // Fallback log without body content if sanitization fails
+          logger.info('handleRequest: Processing MCP request - SDK PATTERN (body logging failed)', {
+            requestId: req.get('x-request-id') || 'unknown',
+            sessionId: sessionId,
+            method: req.method,
+            url: req.url,
+            isInitializeRequest: isInitialize
+          });
+        }
         
         let transport: StreamableHTTPServerTransport;
         
@@ -912,13 +926,23 @@ export class SingleSessionHTTPServer {
     
     // Test endpoint for manual testing without auth
     app.post('/mcp/test', jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
-      logger.info('TEST ENDPOINT: Manual test request received', {
-        method: req.method,
-        headers: req.headers,
-        body: req.body,
-        bodyType: typeof req.body,
-        bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined'
-      });
+      // Log comprehensive debug info about the request
+      // Wrap logging in try-catch to prevent logging errors from crashing the request
+      try {
+        logger.info('TEST ENDPOINT: Manual test request received', {
+          method: req.method,
+          headers: sanitizeHeaders(req.headers),
+          body: sanitizeBody(req.body),
+          bodyType: typeof req.body,
+          bodyContent: req.body ? JSON.stringify(sanitizeBody(req.body), null, 2) : 'undefined'
+        });
+      } catch (logError) {
+        logger.error('Error logging test request details:', logError);
+        // Fallback log without body content if sanitization fails
+        logger.info('TEST ENDPOINT: Manual test request received (body logging failed)', {
+          method: req.method,
+        });
+      }
       
       // Negotiate protocol version for test endpoint
       const negotiationResult = negotiateProtocolVersion(
@@ -1139,21 +1163,31 @@ export class SingleSessionHTTPServer {
     // Main MCP endpoint with authentication and rate limiting
     app.post('/mcp', authLimiter, jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
       // Log comprehensive debug info about the request
-      logger.info('POST /mcp request received - DETAILED DEBUG', {
-        headers: req.headers,
-        readable: req.readable,
-        readableEnded: req.readableEnded,
-        complete: req.complete,
-        bodyType: typeof req.body,
-        bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined',
-        contentLength: req.get('content-length'),
-        contentType: req.get('content-type'),
-        userAgent: req.get('user-agent'),
-        ip: req.ip,
-        method: req.method,
-        url: req.url,
-        originalUrl: req.originalUrl
-      });
+      // Wrap logging in try-catch to prevent logging errors from crashing the request
+      try {
+        logger.info('POST /mcp request received - DETAILED DEBUG', {
+          headers: sanitizeHeaders(req.headers),
+          readable: req.readable,
+          readableEnded: req.readableEnded,
+          complete: req.complete,
+          bodyType: typeof req.body,
+          bodyContent: req.body ? JSON.stringify(sanitizeBody(req.body), null, 2) : 'undefined',
+          contentLength: req.get('content-length'),
+          contentType: req.get('content-type'),
+          userAgent: req.get('user-agent'),
+          ip: req.ip,
+          method: req.method,
+          url: req.url,
+          originalUrl: req.originalUrl
+        });
+      } catch (logError) {
+        logger.error('Error logging request details:', logError);
+        // Fallback log without body content
+        logger.info('POST /mcp request received - DETAILED DEBUG (logging failed)', {
+          method: req.method,
+          url: req.url
+        });
+      }
       
       // Handle connection close to immediately clean up sessions
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
