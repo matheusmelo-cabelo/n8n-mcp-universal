@@ -27,6 +27,7 @@ import {
 import { InstanceContext, validateInstanceContext } from './types/instance-context';
 import { SessionState } from './types/session-state';
 import { closeSharedDatabase } from './database/shared-database';
+import { sanitizeHeaders, sanitizeBody } from './utils/security-utils';
 
 dotenv.config();
 
@@ -473,7 +474,7 @@ export class SingleSessionHTTPServer {
           method: req.method,
           url: req.url,
           bodyType: typeof req.body,
-          bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined',
+          bodyContent: req.body ? JSON.stringify(sanitizeBody(req.body), null, 2) : 'undefined',
           existingTransports: Object.keys(this.transports),
           isInitializeRequest: isInitialize
         });
@@ -914,10 +915,10 @@ export class SingleSessionHTTPServer {
     app.post('/mcp/test', jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
       logger.info('TEST ENDPOINT: Manual test request received', {
         method: req.method,
-        headers: req.headers,
-        body: req.body,
+        headers: sanitizeHeaders(req.headers),
+        body: sanitizeBody(req.body),
         bodyType: typeof req.body,
-        bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined'
+        bodyContent: req.body ? JSON.stringify(sanitizeBody(req.body), null, 2) : 'undefined'
       });
       
       // Negotiate protocol version for test endpoint
@@ -1140,12 +1141,12 @@ export class SingleSessionHTTPServer {
     app.post('/mcp', authLimiter, jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
       // Log comprehensive debug info about the request
       logger.info('POST /mcp request received - DETAILED DEBUG', {
-        headers: req.headers,
+        headers: sanitizeHeaders(req.headers),
         readable: req.readable,
         readableEnded: req.readableEnded,
         complete: req.complete,
         bodyType: typeof req.body,
-        bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined',
+        bodyContent: req.body ? JSON.stringify(sanitizeBody(req.body), null, 2) : 'undefined',
         contentLength: req.get('content-length'),
         contentType: req.get('content-type'),
         userAgent: req.get('user-agent'),
