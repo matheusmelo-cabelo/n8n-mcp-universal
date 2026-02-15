@@ -86,7 +86,41 @@ export class N8nApiClient {
         logger.debug(`n8n API Response: ${response.status} ${response.config.url}`);
         return response;
       },
-      (error: unknown) => {
+      async (error: unknown) => {
+        // Implement retry logic
+        const config = (error as any).config;
+
+        // Only retry if we have config and haven't exceeded maxRetries
+        if (config && this.maxRetries > 0) {
+          config.__retryCount = config.__retryCount || 0;
+
+          // Determine if we should retry based on error type
+          const shouldRetry =
+            // Network errors (no response)
+            (error as any).request && !(error as any).response ||
+            // 5xx Server errors
+            ((error as any).response && (error as any).response.status >= 500) ||
+            // 429 Rate Limit
+            ((error as any).response && (error as any).response.status === 429) ||
+            // Connection reset/refused errors (common in CI/containers)
+            ((error as any).code === 'ECONNRESET' || (error as any).code === 'ECONNREFUSED');
+
+          if (shouldRetry && config.__retryCount < this.maxRetries) {
+            config.__retryCount++;
+
+            // Exponential backoff: 1s, 2s, 4s...
+            const delay = 1000 * Math.pow(2, config.__retryCount - 1);
+
+            logger.warn(`n8n API request failed, retrying (${config.__retryCount}/${this.maxRetries}) in ${delay}ms...`, {
+              url: config.url,
+              error: (error as Error).message
+            });
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return this.client.request(config);
+          }
+        }
+
         const n8nError = handleN8nApiError(error);
         logN8nError(n8nError, 'n8n API Response');
         return Promise.reject(n8nError);
