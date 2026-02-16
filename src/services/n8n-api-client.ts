@@ -65,6 +65,55 @@ export class N8nApiClient {
       },
     });
 
+    // Retry interceptor
+    this.client.interceptors.response.use(
+      undefined,
+      async (error: any) => {
+        const config = error.config;
+
+        // If config does not exist or the retry option is not set, reject
+        if (!config || this.maxRetries <= 0) {
+          return Promise.reject(error);
+        }
+
+        // Initialize retry count
+        config.__retryCount = config.__retryCount || 0;
+
+        // Check if we should retry
+        const shouldRetry =
+          config.__retryCount < this.maxRetries &&
+          (
+            // Network errors (no response)
+            !error.response ||
+            // 5xx Server errors
+            (error.response.status >= 500 && error.response.status <= 599) ||
+            // 429 Rate Limit
+            error.response.status === 429
+          );
+
+        if (shouldRetry) {
+          config.__retryCount += 1;
+
+          // Calculate delay with exponential backoff
+          const backoff = Math.pow(2, config.__retryCount) * 1000;
+          const delay = backoff + Math.random() * 1000; // Add jitter
+
+          logger.warn(`n8n API request failed, retrying (${config.__retryCount}/${this.maxRetries}) in ${Math.round(delay)}ms...`, {
+            url: config.url,
+            error: error.message
+          });
+
+          // Wait for delay
+          await new Promise(resolve => setTimeout(resolve, delay));
+
+          // Retry request
+          return this.client(config);
+        }
+
+        return Promise.reject(error);
+      }
+    );
+
     // Request interceptor for logging
     this.client.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
