@@ -27,6 +27,7 @@ import {
 import { InstanceContext, validateInstanceContext } from './types/instance-context';
 import { SessionState } from './types/session-state';
 import { closeSharedDatabase } from './database/shared-database';
+import { sanitizeLogData } from './utils/security-utils';
 
 dotenv.config();
 
@@ -467,13 +468,14 @@ export class SingleSessionHTTPServer {
         const isInitialize = req.body ? isInitializeRequest(req.body) : false;
         
         // Log comprehensive incoming request details for debugging
+        // SECURITY: Sanitize body content to prevent sensitive data leakage in logs
         logger.info('handleRequest: Processing MCP request - SDK PATTERN', {
           requestId: req.get('x-request-id') || 'unknown',
           sessionId: sessionId,
           method: req.method,
           url: req.url,
           bodyType: typeof req.body,
-          bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined',
+          bodyContent: req.body ? JSON.stringify(sanitizeLogData(req.body), null, 2) : 'undefined',
           existingTransports: Object.keys(this.transports),
           isInitializeRequest: isInitialize
         });
@@ -912,12 +914,13 @@ export class SingleSessionHTTPServer {
     
     // Test endpoint for manual testing without auth
     app.post('/mcp/test', jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
+      // SECURITY: Sanitize body content to prevent sensitive data leakage in logs
       logger.info('TEST ENDPOINT: Manual test request received', {
         method: req.method,
         headers: req.headers,
-        body: req.body,
+        body: sanitizeLogData(req.body),
         bodyType: typeof req.body,
-        bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined'
+        bodyContent: req.body ? JSON.stringify(sanitizeLogData(req.body), null, 2) : 'undefined'
       });
       
       // Negotiate protocol version for test endpoint
@@ -1139,13 +1142,14 @@ export class SingleSessionHTTPServer {
     // Main MCP endpoint with authentication and rate limiting
     app.post('/mcp', authLimiter, jsonParser, async (req: express.Request, res: express.Response): Promise<void> => {
       // Log comprehensive debug info about the request
+      // SECURITY: Sanitize body content to prevent sensitive data leakage in logs
       logger.info('POST /mcp request received - DETAILED DEBUG', {
         headers: req.headers,
         readable: req.readable,
         readableEnded: req.readableEnded,
         complete: req.complete,
         bodyType: typeof req.body,
-        bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'undefined',
+        bodyContent: req.body ? JSON.stringify(sanitizeLogData(req.body), null, 2) : 'undefined',
         contentLength: req.get('content-length'),
         contentType: req.get('content-type'),
         userAgent: req.get('user-agent'),
