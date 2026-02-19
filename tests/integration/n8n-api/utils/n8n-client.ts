@@ -31,7 +31,9 @@ export function getTestN8nClient(): N8nApiClient {
       baseUrl: creds.url,
       apiKey: creds.apiKey,
       timeout: 30000,
-      maxRetries: 3
+      maxRetries: 3,
+      validateBaseUrl: false, // Explicitly disable SSRF validation for tests
+      securityMode: 'permissive' // Fallback to permissive just in case
     });
   }
   return client;
