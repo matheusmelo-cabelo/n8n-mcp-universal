@@ -37,7 +37,7 @@ describe('N8nApiClient SSRF Protection', () => {
     expect(SSRFProtection.validateWebhookUrl).not.toHaveBeenCalled();
   });
 
-  it('should block request when validateBaseUrl is true and URL is invalid', async () => {
+  it('should block request when validateBaseUrl is true and URL is invalid in strict mode', async () => {
     // Mock SSRFProtection to fail
     (SSRFProtection.validateWebhookUrl as any).mockResolvedValue({
       valid: false,
@@ -47,7 +47,8 @@ describe('N8nApiClient SSRF Protection', () => {
     const client = new N8nApiClient({
       baseUrl: 'http://localhost:5678',
       apiKey: 'test',
-      validateBaseUrl: true
+      validateBaseUrl: true,
+      securityMode: 'strict'
     });
 
     // Mock the axios instance inside client
@@ -63,8 +64,30 @@ describe('N8nApiClient SSRF Protection', () => {
     );
   });
 
-  it('should allow request when validateBaseUrl is true and URL is valid', async () => {
+  it('should pass configured securityMode to validateWebhookUrl', async () => {
     // Mock SSRFProtection to pass
+    (SSRFProtection.validateWebhookUrl as any).mockResolvedValue({ valid: true });
+
+    const client = new N8nApiClient({
+      baseUrl: 'http://localhost:5678',
+      apiKey: 'test',
+      validateBaseUrl: true,
+      securityMode: 'permissive'
+    });
+
+    const mock = new MockAdapter((client as any).client);
+    mock.onGet('/workflows').reply(200, { data: [] });
+
+    await client.listWorkflows();
+
+    // Verify SSRFProtection was called with permissive mode
+    expect(SSRFProtection.validateWebhookUrl).toHaveBeenCalledWith(
+      'http://localhost:5678',
+      'permissive'
+    );
+  });
+
+  it('should default to strict mode if not specified', async () => {
     (SSRFProtection.validateWebhookUrl as any).mockResolvedValue({ valid: true });
 
     const client = new N8nApiClient({
@@ -73,13 +96,11 @@ describe('N8nApiClient SSRF Protection', () => {
       validateBaseUrl: true
     });
 
-    // Mock the axios instance inside client
     const mock = new MockAdapter((client as any).client);
     mock.onGet('/workflows').reply(200, { data: [] });
 
     await client.listWorkflows();
 
-    // Verify SSRFProtection was called
     expect(SSRFProtection.validateWebhookUrl).toHaveBeenCalledWith(
       'https://n8n.example.com',
       'strict'

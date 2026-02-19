@@ -1,4 +1,5 @@
 import { N8nApiClient } from '../services/n8n-api-client';
+import type { SecurityMode } from '../utils/ssrf-protection';
 import { getN8nApiConfig, getN8nApiConfigFromContext } from '../config/n8n-api';
 import {
   Workflow,
@@ -311,16 +312,23 @@ export function getN8nApiClient(context?: InstanceContext): N8nApiClient | null 
 
     const config = getN8nApiConfigFromContext(context);
     if (config) {
+      // Determine security mode based on environment
+      // In test environments, we allow permissive mode to support local/container URLs
+      const isTestEnv = process.env.NODE_ENV === 'test' || process.env.CI === 'true';
+      const securityMode: SecurityMode = isTestEnv ? 'permissive' : 'strict';
+
       // Sanitized logging - never log API keys
       logger.info('Creating instance-specific n8n API client', {
         url: config.baseUrl.replace(/^(https?:\/\/[^\/]+).*/, '$1'), // Only log domain
         instanceId: context.instanceId,
-        cacheKey: cacheKey.substring(0, 8) + '...' // Only log partial hash
+        cacheKey: cacheKey.substring(0, 8) + '...', // Only log partial hash
+        securityMode
       });
 
       const client = new N8nApiClient({
         ...config,
-        validateBaseUrl: true // Enforce SSRF protection for user-provided URLs
+        validateBaseUrl: true, // Enforce SSRF protection for user-provided URLs
+        securityMode // Use appropriate security mode (permissive for tests, strict for prod)
       });
       instanceClients.set(cacheKey, client);
       cacheMetrics.recordSet();
