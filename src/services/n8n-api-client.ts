@@ -36,6 +36,12 @@ export interface N8nApiClientConfig {
   apiKey: string;
   timeout?: number;
   maxRetries?: number;
+  /**
+   * Whether to validate the base URL against SSRF rules.
+   * Useful when the base URL is provided by an untrusted source (e.g. user headers).
+   * @default false
+   */
+  validateBaseUrl?: boolean;
 }
 
 export class N8nApiClient {
@@ -44,9 +50,10 @@ export class N8nApiClient {
   private baseUrl: string;
   private versionInfo: N8nVersionInfo | null = null;
   private versionPromise: Promise<N8nVersionInfo | null> | null = null;
+  private isBaseUrlValidated = false;
 
   constructor(config: N8nApiClientConfig) {
-    const { baseUrl, apiKey, timeout = 30000, maxRetries = 3 } = config;
+    const { baseUrl, apiKey, timeout = 30000, maxRetries = 3, validateBaseUrl = false } = config;
 
     this.maxRetries = maxRetries;
     this.baseUrl = baseUrl;
@@ -65,9 +72,38 @@ export class N8nApiClient {
       },
     });
 
-    // Request interceptor for logging
+    // Request interceptor for logging and SSRF protection
     this.client.interceptors.request.use(
-      (config: InternalAxiosRequestConfig) => {
+      async (config: InternalAxiosRequestConfig) => {
+        // SSRF Protection for base URL
+        if (validateBaseUrl && !this.isBaseUrlValidated) {
+          try {
+            // Validate the original base URL (without /api/v1 suffix if possible, or just the whole thing)
+            // We use strict mode to block private IPs for untrusted inputs
+            const { SSRFProtection } = await import('../utils/ssrf-protection');
+            const validation = await SSRFProtection.validateWebhookUrl(this.baseUrl, 'strict');
+
+            if (!validation.valid) {
+              const error = new Error(`SSRF protection: Invalid n8n API URL. ${validation.reason}`);
+              logger.error('SSRF blocked n8n API request', {
+                url: this.baseUrl,
+                reason: validation.reason
+              });
+              throw error;
+            }
+
+            // Cache validation result
+            this.isBaseUrlValidated = true;
+            logger.debug('n8n API URL passed SSRF validation', { url: this.baseUrl });
+          } catch (error) {
+            // Re-throw if it's our SSRF error, otherwise wrap it
+            if (error instanceof Error && error.message.startsWith('SSRF')) {
+              throw error;
+            }
+            throw new Error(`Failed to validate n8n API URL: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+
         logger.debug(`n8n API Request: ${config.method?.toUpperCase()} ${config.url}`, {
           params: config.params,
           data: config.data,

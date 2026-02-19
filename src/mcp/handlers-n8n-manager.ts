@@ -318,7 +318,10 @@ export function getN8nApiClient(context?: InstanceContext): N8nApiClient | null 
         cacheKey: cacheKey.substring(0, 8) + '...' // Only log partial hash
       });
 
-      const client = new N8nApiClient(config);
+      const client = new N8nApiClient({
+        ...config,
+        validateBaseUrl: true // Enforce SSRF protection for user-provided URLs
+      });
       instanceClients.set(cacheKey, client);
       cacheMetrics.recordSet();
       cacheMetrics.updateSize(instanceClients.size, instanceClients.max);

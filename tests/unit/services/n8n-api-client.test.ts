@@ -1271,7 +1271,7 @@ describe('N8nApiClient', () => {
       client = new N8nApiClient(defaultConfig);
     });
 
-    it('should log requests', () => {
+    it('should log requests', async () => {
       const config = { 
         method: 'get', 
         url: '/workflows',
@@ -1279,7 +1279,7 @@ describe('N8nApiClient', () => {
         data: undefined,
       };
       
-      const result = requestInterceptor(config);
+      const result = await requestInterceptor(config);
       
       expect(logger.debug).toHaveBeenCalledWith(
         'n8n API Request: GET /workflows',
