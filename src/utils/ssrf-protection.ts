@@ -15,7 +15,7 @@ import { logger } from './logger';
  */
 
 // Security mode type
-type SecurityMode = 'strict' | 'moderate' | 'permissive';
+export type SecurityMode = 'strict' | 'moderate' | 'permissive';
 
 // Cloud metadata endpoints (ALWAYS blocked in all modes)
 const CLOUD_METADATA = new Set([
@@ -55,6 +55,7 @@ export class SSRFProtection {
    * Validate webhook URL for SSRF protection with configurable security modes
    *
    * @param urlString - URL to validate
+   * @param modeOverride - Optional override for security mode (defaults to WEBHOOK_SECURITY_MODE or 'strict')
    * @returns Promise with validation result
    *
    * @security Uses DNS resolution to prevent DNS rebinding attacks
@@ -69,14 +70,19 @@ export class SSRFProtection {
    * process.env.WEBHOOK_SECURITY_MODE = 'moderate';
    * const result = await SSRFProtection.validateWebhookUrl('http://localhost:5678');
    * // { valid: true }
+   *
+   * @example
+   * // Override with strict mode (force block private IPs)
+   * const result = await SSRFProtection.validateWebhookUrl('http://10.0.0.1', 'strict');
+   * // { valid: false, reason: 'Private IP addresses not allowed' }
    */
-  static async validateWebhookUrl(urlString: string): Promise<{
+  static async validateWebhookUrl(urlString: string, modeOverride?: SecurityMode): Promise<{
     valid: boolean;
     reason?: string
   }> {
     try {
       const url = new URL(urlString);
-      const mode: SecurityMode = (process.env.WEBHOOK_SECURITY_MODE || 'strict') as SecurityMode;
+      const mode: SecurityMode = modeOverride || (process.env.WEBHOOK_SECURITY_MODE || 'strict') as SecurityMode;
 
       // Step 1: Must be HTTP/HTTPS (all modes)
       if (!['http:', 'https:'].includes(url.protocol)) {

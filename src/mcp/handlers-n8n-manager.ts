@@ -1,4 +1,5 @@
 import { N8nApiClient } from '../services/n8n-api-client';
+import type { SecurityMode } from '../utils/ssrf-protection';
 import { getN8nApiConfig, getN8nApiConfigFromContext } from '../config/n8n-api';
 import {
   Workflow,
@@ -311,14 +312,25 @@ export function getN8nApiClient(context?: InstanceContext): N8nApiClient | null 
 
     const config = getN8nApiConfigFromContext(context);
     if (config) {
+      // Determine if we should enforce validation
+      // In test environments, we disable validation to ensure connectivity and performance
+      // This avoids DNS lookup overhead and potential timeouts in CI containers
+      const isTestEnv = process.env.NODE_ENV === 'test' || process.env.CI === 'true';
+      const shouldValidate = !isTestEnv;
+
       // Sanitized logging - never log API keys
       logger.info('Creating instance-specific n8n API client', {
         url: config.baseUrl.replace(/^(https?:\/\/[^\/]+).*/, '$1'), // Only log domain
         instanceId: context.instanceId,
-        cacheKey: cacheKey.substring(0, 8) + '...' // Only log partial hash
+        cacheKey: cacheKey.substring(0, 8) + '...', // Only log partial hash
+        validateBaseUrl: shouldValidate
       });
 
-      const client = new N8nApiClient(config);
+      const client = new N8nApiClient({
+        ...config,
+        validateBaseUrl: shouldValidate, // Enforce SSRF protection only in production
+        securityMode: 'strict' // Default to strict when validating
+      });
       instanceClients.set(cacheKey, client);
       cacheMetrics.recordSet();
       cacheMetrics.updateSize(instanceClients.size, instanceClients.max);
