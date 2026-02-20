@@ -394,4 +394,95 @@ describe('SSRFProtection', () => {
       expect(result.valid).toBe(true);
     });
   });
+
+  describe('Synchronous Validation (validateUrlSync)', () => {
+    describe('Strict Mode (default)', () => {
+      beforeEach(() => {
+        delete process.env.WEBHOOK_SECURITY_MODE; // Use default strict
+      });
+
+      it('should block localhost hostnames', () => {
+        const localhostURLs = [
+          'http://localhost:3000/webhook',
+          'http://127.0.0.1/webhook',
+          'http://[::1]/webhook',
+        ];
+
+        for (const url of localhostURLs) {
+          const result = SSRFProtection.validateUrlSync(url);
+          expect(result.valid, `URL ${url} should be blocked`).toBe(false);
+          expect(result.reason).toContain('Localhost');
+        }
+      });
+
+      it('should block explicit private IPs', () => {
+        const privateIPs = [
+          'http://10.0.0.1/webhook',
+          'http://192.168.1.1/webhook',
+          'http://172.16.0.1/webhook',
+        ];
+
+        for (const url of privateIPs) {
+          const result = SSRFProtection.validateUrlSync(url);
+          expect(result.valid, `URL ${url} should be blocked`).toBe(false);
+          expect(result.reason).toContain('Private IP');
+        }
+      });
+
+      it('should allow valid domains', () => {
+        const validURLs = [
+          'https://google.com',
+          'http://example.com/api',
+        ];
+
+        for (const url of validURLs) {
+          const result = SSRFProtection.validateUrlSync(url);
+          expect(result.valid, `URL ${url} should be valid`).toBe(true);
+        }
+      });
+
+      it('should allow domains starting with private IP prefix (false positive check)', () => {
+        // "10.com" starts with "10." but is a domain, not an IP
+        // The sync validator should be smart enough not to block it
+        const result = SSRFProtection.validateUrlSync('http://10.com');
+        expect(result.valid).toBe(true);
+      });
+    });
+
+    describe('Permissive Mode', () => {
+      beforeEach(() => {
+        process.env.WEBHOOK_SECURITY_MODE = 'permissive';
+      });
+
+      it('should allow localhost', () => {
+        const result = SSRFProtection.validateUrlSync('http://localhost:3000');
+        expect(result.valid).toBe(true);
+      });
+
+      it('should allow private IPs', () => {
+        const result = SSRFProtection.validateUrlSync('http://192.168.1.1');
+        expect(result.valid).toBe(true);
+      });
+
+      it('should still block cloud metadata', () => {
+        const result = SSRFProtection.validateUrlSync('http://169.254.169.254/latest/meta-data');
+        expect(result.valid).toBe(false);
+        expect(result.reason).toContain('Cloud metadata');
+      });
+    });
+
+    describe('Mode Override', () => {
+      beforeEach(() => {
+        delete process.env.WEBHOOK_SECURITY_MODE; // Default strict
+      });
+
+      it('should respect mode passed as argument', () => {
+        // Should default to strict and block localhost
+        expect(SSRFProtection.validateUrlSync('http://localhost:3000').valid).toBe(false);
+
+        // Should allow localhost if mode is permissive passed explicitly
+        expect(SSRFProtection.validateUrlSync('http://localhost:3000', 'permissive').valid).toBe(true);
+      });
+    });
+  });
 });
