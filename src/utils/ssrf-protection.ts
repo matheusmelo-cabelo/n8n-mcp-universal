@@ -15,7 +15,7 @@ import { logger } from './logger';
  */
 
 // Security mode type
-type SecurityMode = 'strict' | 'moderate' | 'permissive';
+export type SecurityMode = 'strict' | 'moderate' | 'permissive';
 
 // Cloud metadata endpoints (ALWAYS blocked in all modes)
 const CLOUD_METADATA = new Set([
@@ -51,6 +51,73 @@ const PRIVATE_IP_RANGES = [
 ];
 
 export class SSRFProtection {
+  /**
+   * Synchronous URL validation (no DNS resolution)
+   * Blocks localhost and private IP ranges directly in the URL
+   *
+   * Useful for validating config parameters where async DNS resolution is not feasible.
+   *
+   * @param urlString - URL to validate
+   * @param securityMode - Optional override for security mode (defaults to WEBHOOK_SECURITY_MODE or 'strict')
+   * @returns Validation result
+   */
+  static validateUrlSync(urlString: string, securityMode?: SecurityMode): { valid: boolean; reason?: string } {
+    try {
+      const url = new URL(urlString);
+      const mode: SecurityMode = securityMode || (process.env.WEBHOOK_SECURITY_MODE || 'strict') as SecurityMode;
+
+      // Step 1: Must be HTTP/HTTPS
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        return { valid: false, reason: 'Invalid protocol. Only HTTP/HTTPS allowed.' };
+      }
+
+      // Get hostname and strip IPv6 brackets if present
+      let hostname = url.hostname.toLowerCase();
+      if (hostname.startsWith('[') && hostname.endsWith(']')) {
+        hostname = hostname.slice(1, -1);
+      }
+
+      // Step 2: Check cloud metadata (hostname match)
+      if (CLOUD_METADATA.has(hostname)) {
+        return { valid: false, reason: 'Cloud metadata endpoint blocked' };
+      }
+
+      // Step 3: Check localhost
+      const isLocalhost = LOCALHOST_PATTERNS.has(hostname);
+
+      if (mode === 'strict' && isLocalhost) {
+        return { valid: false, reason: 'Localhost not allowed in strict mode' };
+      }
+
+      // Step 4: Check private IPs (if hostname is an IP)
+      // Only apply IP regexes if it looks like an IP to avoid false positives on domains
+      const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+      const isIPv6 = hostname.includes(':');
+
+      if (mode !== 'permissive') {
+        if (isIPv4) {
+          if (PRIVATE_IP_RANGES.some(regex => regex.test(hostname))) {
+            return { valid: false, reason: 'Private IP address not allowed' };
+          }
+        } else if (isIPv6) {
+          // Check for IPv6 private addresses
+          if (hostname === '::1' ||         // Loopback
+              hostname === '::' ||          // Unspecified
+              hostname.startsWith('fe80:') || // Link-local
+              hostname.startsWith('fc00:') || // Unique local
+              hostname.startsWith('fd00:') || // Unique local
+              hostname.startsWith('::ffff:')) { // IPv4-mapped
+            return { valid: false, reason: 'IPv6 private address not allowed' };
+          }
+        }
+      }
+
+      return { valid: true };
+    } catch {
+      return { valid: false, reason: 'Invalid URL format' };
+    }
+  }
+
   /**
    * Validate webhook URL for SSRF protection with configurable security modes
    *
