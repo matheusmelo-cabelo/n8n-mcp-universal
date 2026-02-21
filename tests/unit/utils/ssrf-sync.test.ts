@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SSRFProtection, SecurityMode } from '../../../src/utils/ssrf-protection';
+import { validateUrlSync, SecurityMode } from '../../../src/utils/url-validator-sync';
 
 /**
  * Unit tests for synchronous SSRF validation
  *
- * These tests verify the static analysis capabilities of SSRFProtection
+ * These tests verify the static analysis capabilities of validateUrlSync
  * which are used for initial configuration validation.
  */
-describe('SSRFProtection.validateUrlSync', () => {
+describe('validateUrlSync', () => {
   // Test cloud metadata blocking (always blocked in all modes)
   describe('Cloud Metadata Protection (All Modes)', () => {
     const metadataUrls = [
@@ -23,7 +23,7 @@ describe('SSRFProtection.validateUrlSync', () => {
     modes.forEach(mode => {
       it(`should block cloud metadata in ${mode} mode`, () => {
         for (const url of metadataUrls) {
-          const result = SSRFProtection.validateUrlSync(url, mode);
+          const result = validateUrlSync(url, mode);
           expect(result.valid, `Failed to block ${url} in ${mode} mode`).toBe(false);
           expect(result.reason).toContain('Cloud metadata');
         }
@@ -41,7 +41,7 @@ describe('SSRFProtection.validateUrlSync', () => {
       ];
 
       for (const url of urls) {
-        const result = SSRFProtection.validateUrlSync(url, 'strict');
+        const result = validateUrlSync(url, 'strict');
         expect(result.valid).toBe(false);
         expect(result.reason).toContain('Localhost');
       }
@@ -55,7 +55,7 @@ describe('SSRFProtection.validateUrlSync', () => {
       ];
 
       for (const url of urls) {
-        const result = SSRFProtection.validateUrlSync(url, 'strict');
+        const result = validateUrlSync(url, 'strict');
         expect(result.valid).toBe(false);
         expect(result.reason).toContain('Private IP');
       }
@@ -68,7 +68,7 @@ describe('SSRFProtection.validateUrlSync', () => {
       ];
 
       for (const url of urls) {
-        const result = SSRFProtection.validateUrlSync(url, 'strict');
+        const result = validateUrlSync(url, 'strict');
         expect(result.valid).toBe(true);
       }
     });
@@ -84,7 +84,7 @@ describe('SSRFProtection.validateUrlSync', () => {
       ];
 
       for (const url of urls) {
-        const result = SSRFProtection.validateUrlSync(url, 'moderate');
+        const result = validateUrlSync(url, 'moderate');
         expect(result.valid).toBe(true);
       }
     });
@@ -96,7 +96,7 @@ describe('SSRFProtection.validateUrlSync', () => {
       ];
 
       for (const url of urls) {
-        const result = SSRFProtection.validateUrlSync(url, 'moderate');
+        const result = validateUrlSync(url, 'moderate');
         expect(result.valid).toBe(false);
         expect(result.reason).toContain('Private IP');
       }
@@ -106,17 +106,17 @@ describe('SSRFProtection.validateUrlSync', () => {
   // Test Permissive Mode
   describe('Permissive Mode', () => {
     it('should allow localhost', () => {
-      const result = SSRFProtection.validateUrlSync('http://localhost:3000', 'permissive');
+      const result = validateUrlSync('http://localhost:3000', 'permissive');
       expect(result.valid).toBe(true);
     });
 
     it('should allow private IPs', () => {
-      const result = SSRFProtection.validateUrlSync('http://192.168.1.100', 'permissive');
+      const result = validateUrlSync('http://192.168.1.100', 'permissive');
       expect(result.valid).toBe(true);
     });
 
     it('should still block cloud metadata', () => {
-      const result = SSRFProtection.validateUrlSync('http://169.254.169.254', 'permissive');
+      const result = validateUrlSync('http://169.254.169.254', 'permissive');
       expect(result.valid).toBe(false);
       expect(result.reason).toContain('Cloud metadata');
     });
@@ -125,7 +125,7 @@ describe('SSRFProtection.validateUrlSync', () => {
   // Test Edge Cases
   describe('Edge Cases', () => {
     it('should handle invalid URLs gracefully', () => {
-      const result = SSRFProtection.validateUrlSync('not-a-url');
+      const result = validateUrlSync('not-a-url');
       expect(result.valid).toBe(false);
       expect(result.reason).toBe('Invalid URL format');
     });
@@ -138,7 +138,7 @@ describe('SSRFProtection.validateUrlSync', () => {
       ];
 
       for (const url of urls) {
-        const result = SSRFProtection.validateUrlSync(url);
+        const result = validateUrlSync(url);
         expect(result.valid).toBe(false);
         expect(result.reason).toContain('protocol');
       }
@@ -146,7 +146,7 @@ describe('SSRFProtection.validateUrlSync', () => {
 
     it('should default to strict mode if not specified', () => {
       // Localhost should be blocked in strict (default)
-      const result = SSRFProtection.validateUrlSync('http://localhost:3000');
+      const result = validateUrlSync('http://localhost:3000');
       expect(result.valid).toBe(false);
       expect(result.reason).toContain('Localhost');
     });

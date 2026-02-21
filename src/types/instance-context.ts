@@ -6,7 +6,7 @@
  * backward compatibility with environment-based configuration.
  */
 
-import { SSRFProtection, SecurityMode } from '../utils/ssrf-protection';
+import { validateUrlSync, SecurityMode } from '../utils/url-validator-sync';
 
 export interface InstanceContext {
   /**
@@ -51,7 +51,7 @@ export function isInstanceContext(obj: any): obj is InstanceContext {
 
   // Check for known properties with validation
   const hasValidUrl = obj.n8nApiUrl === undefined ||
-    (typeof obj.n8nApiUrl === 'string' && SSRFProtection.validateUrlSync(obj.n8nApiUrl, 'permissive').valid);
+    (typeof obj.n8nApiUrl === 'string' && validateUrlSync(obj.n8nApiUrl, 'permissive').valid);
 
   const hasValidKey = obj.n8nApiKey === undefined ||
     (typeof obj.n8nApiKey === 'string' && isValidApiKey(obj.n8nApiKey));
@@ -89,7 +89,7 @@ export function validateInstanceContext(context: InstanceContext): {
       // Use permissive mode by default for API URL unless N8N_API_SECURITY_MODE is set
       // This supports local deployments (localhost/private IPs) while blocking cloud metadata
       const mode = (process.env.N8N_API_SECURITY_MODE || 'permissive') as SecurityMode;
-      const validation = SSRFProtection.validateUrlSync(context.n8nApiUrl, mode);
+      const validation = validateUrlSync(context.n8nApiUrl, mode);
 
       if (!validation.valid) {
         errors.push(`Invalid n8nApiUrl: ${validation.reason || 'Invalid URL'}`);
