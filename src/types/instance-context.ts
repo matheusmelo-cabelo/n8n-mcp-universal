@@ -6,6 +6,8 @@
  * backward compatibility with environment-based configuration.
  */
 
+import { SSRFProtection, SecurityMode } from '../utils/ssrf-protection';
+
 export interface InstanceContext {
   /**
    * Instance-specific n8n API configuration
@@ -31,60 +33,6 @@ export interface InstanceContext {
 }
 
 /**
- * Validate URL format with enhanced checks
- */
-function isValidUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-
-    // Allow only http and https protocols
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return false;
-    }
-
-    // Check for reasonable hostname (not empty or invalid)
-    if (!parsed.hostname || parsed.hostname.length === 0) {
-      return false;
-    }
-
-    // Validate port if present
-    if (parsed.port && (isNaN(Number(parsed.port)) || Number(parsed.port) < 1 || Number(parsed.port) > 65535)) {
-      return false;
-    }
-
-    // Allow localhost, IP addresses, and domain names
-    const hostname = parsed.hostname.toLowerCase();
-
-    // Allow localhost for development
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
-      return true;
-    }
-
-    // Basic IPv4 address validation
-    const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-    if (ipv4Pattern.test(hostname)) {
-      const parts = hostname.split('.');
-      return parts.every(part => {
-        const num = parseInt(part, 10);
-        return num >= 0 && num <= 255;
-      });
-    }
-
-    // Basic IPv6 pattern check (simplified)
-    if (hostname.includes(':') || hostname.startsWith('[') && hostname.endsWith(']')) {
-      // Basic IPv6 validation - just checking it's not obviously wrong
-      return true;
-    }
-
-    // Domain name validation - allow subdomains and TLDs
-    const domainPattern = /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/;
-    return domainPattern.test(hostname);
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Validate API key format (basic check for non-empty string)
  */
 function isValidApiKey(key: string): boolean {
@@ -103,7 +51,7 @@ export function isInstanceContext(obj: any): obj is InstanceContext {
 
   // Check for known properties with validation
   const hasValidUrl = obj.n8nApiUrl === undefined ||
-    (typeof obj.n8nApiUrl === 'string' && isValidUrl(obj.n8nApiUrl));
+    (typeof obj.n8nApiUrl === 'string' && SSRFProtection.validateUrlSync(obj.n8nApiUrl, 'permissive').valid);
 
   const hasValidKey = obj.n8nApiKey === undefined ||
     (typeof obj.n8nApiKey === 'string' && isValidApiKey(obj.n8nApiKey));
@@ -137,15 +85,14 @@ export function validateInstanceContext(context: InstanceContext): {
   if (context.n8nApiUrl !== undefined) {
     if (context.n8nApiUrl === '') {
       errors.push(`Invalid n8nApiUrl: empty string - URL is required when field is provided`);
-    } else if (!isValidUrl(context.n8nApiUrl)) {
-      // Provide specific reason for URL invalidity
-      try {
-        const parsed = new URL(context.n8nApiUrl);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          errors.push(`Invalid n8nApiUrl: URL must use HTTP or HTTPS protocol, got ${parsed.protocol}`);
-        }
-      } catch {
-        errors.push(`Invalid n8nApiUrl: URL format is malformed or incomplete`);
+    } else {
+      // Use permissive mode by default for API URL unless N8N_API_SECURITY_MODE is set
+      // This supports local deployments (localhost/private IPs) while blocking cloud metadata
+      const mode = (process.env.N8N_API_SECURITY_MODE || 'permissive') as SecurityMode;
+      const validation = SSRFProtection.validateUrlSync(context.n8nApiUrl, mode);
+
+      if (!validation.valid) {
+        errors.push(`Invalid n8nApiUrl: ${validation.reason || 'Invalid URL'}`);
       }
     }
   }

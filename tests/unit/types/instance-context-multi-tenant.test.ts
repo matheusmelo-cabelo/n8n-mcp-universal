@@ -322,10 +322,9 @@ describe('Instance Context Multi-Tenant URL Validation', () => {
             const isValid = isInstanceContext(context);
             const validation = validateInstanceContext(context);
 
-            // Document the current behavior - type guard is stricter
-            expect(isValid).toBe(false);
-            // Note: validateInstanceContext might be more permissive
-            // This shows the current implementation behavior
+            // Both checks now use unified validation logic
+            // If one passes, the other should pass too
+            expect(isValid).toBe(validation.valid);
           });
         });
 
@@ -397,7 +396,7 @@ describe('Instance Context Multi-Tenant URL Validation', () => {
           const validation = validateInstanceContext(context);
           expect(validation.valid).toBe(false);
           expect(validation.errors).toBeDefined();
-          expect(validation.errors?.[0]).toContain('URL must use HTTP or HTTPS protocol');
+          expect(validation.errors?.[0]).toContain('Invalid protocol. Only HTTP/HTTPS allowed.');
         });
       });
     });
