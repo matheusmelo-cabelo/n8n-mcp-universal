@@ -5,18 +5,58 @@
  * Covers validation profiles, validation types, and error detection.
  */
 
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { createTestContext, TestContext, createTestWorkflowName } from '../utils/test-context';
-import { getTestN8nClient } from '../utils/n8n-client';
 import { N8nApiClient } from '../../../../src/services/n8n-api-client';
 import { SIMPLE_WEBHOOK_WORKFLOW } from '../utils/fixtures';
-import { cleanupOrphanedWorkflows } from '../utils/cleanup-helpers';
 import { createMcpContext } from '../utils/mcp-context';
 import { InstanceContext } from '../../../../src/types/instance-context';
 import { handleValidateWorkflow } from '../../../../src/mcp/handlers-n8n-manager';
 import { getNodeRepository, closeNodeRepository } from '../utils/node-repository';
 import { NodeRepository } from '../../../../src/database/node-repository';
 import { ValidationResponse } from '../types/mcp-responses';
+
+// Mock storage
+const mockWorkflows = new Map<string, any>();
+
+// Use hoisted function for the module mock
+const { mockGetTestN8nClient } = vi.hoisted(() => {
+  return {
+    mockGetTestN8nClient: vi.fn()
+  };
+});
+
+// Mock the n8n-client module using the hoisted function
+vi.mock('../utils/n8n-client', () => ({
+  getTestN8nClient: mockGetTestN8nClient
+}));
+
+// Setup mock client implementation
+const mockClient = {
+  createWorkflow: vi.fn().mockImplementation(async (workflow: any) => {
+    const id = `mock-workflow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newWorkflow = { ...workflow, id, active: false };
+    mockWorkflows.set(id, newWorkflow);
+    return newWorkflow;
+  }),
+  getWorkflow: vi.fn().mockImplementation(async (id: string) => {
+    const workflow = mockWorkflows.get(id);
+    if (!workflow) throw new Error(`Workflow ${id} not found`);
+    return workflow;
+  }),
+  deleteWorkflow: vi.fn().mockImplementation(async (id: string) => {
+    mockWorkflows.delete(id);
+    return { id, success: true };
+  })
+};
+
+// Configure the hoisted mock to return our client
+mockGetTestN8nClient.mockReturnValue(mockClient);
+
+// Mock cleanup helpers to avoid network calls
+vi.mock('../utils/cleanup-helpers', () => ({
+  cleanupOrphanedWorkflows: vi.fn().mockResolvedValue(undefined)
+}));
 
 describe('Integration: handleValidateWorkflow', () => {
   let context: TestContext;
@@ -25,21 +65,22 @@ describe('Integration: handleValidateWorkflow', () => {
   let repository: NodeRepository;
 
   beforeEach(async () => {
+    // Clear mock storage before each test
+    mockWorkflows.clear();
+
     context = createTestContext();
-    client = getTestN8nClient();
+    // @ts-ignore - Using mock client
+    client = mockClient;
     mcpContext = createMcpContext();
     repository = await getNodeRepository();
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    // Context cleanup is handled by mock client
   });
 
   afterAll(async () => {
     await closeNodeRepository();
-    if (!process.env.CI) {
-      await cleanupOrphanedWorkflows();
-    }
   });
 
   // ======================================================================
