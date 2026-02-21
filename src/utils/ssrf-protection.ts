@@ -1,56 +1,23 @@
 import { URL } from 'url';
 import { lookup } from 'dns/promises';
 import { logger } from './logger';
+import {
+  validateUrlSync,
+  SecurityMode,
+  CLOUD_METADATA,
+  LOCALHOST_PATTERNS,
+  PRIVATE_IP_RANGES
+} from './url-validator-sync';
 
-/**
- * SSRF Protection Utility with Configurable Security Modes
- *
- * Validates URLs to prevent Server-Side Request Forgery attacks including DNS rebinding
- * See: https://github.com/czlonkowski/n8n-mcp/issues/265 (HIGH-03)
- *
- * Security Modes:
- * - strict (default): Block localhost + private IPs + cloud metadata (production)
- * - moderate: Allow localhost, block private IPs + cloud metadata (local dev)
- * - permissive: Allow localhost + private IPs, block cloud metadata (testing only)
- */
-
-// Security mode type
-type SecurityMode = 'strict' | 'moderate' | 'permissive';
-
-// Cloud metadata endpoints (ALWAYS blocked in all modes)
-const CLOUD_METADATA = new Set([
-  // AWS/Azure
-  '169.254.169.254', // AWS/Azure metadata
-  '169.254.170.2',   // AWS ECS metadata
-  // Google Cloud
-  'metadata.google.internal', // GCP metadata
-  'metadata',
-  // Alibaba Cloud
-  '100.100.100.200', // Alibaba Cloud metadata
-  // Oracle Cloud
-  '192.0.0.192',     // Oracle Cloud metadata
-]);
-
-// Localhost patterns
-const LOCALHOST_PATTERNS = new Set([
-  'localhost',
-  '127.0.0.1',
-  '::1',
-  '0.0.0.0',
-  'localhost.localdomain',
-]);
-
-// Private IP ranges (regex for IPv4)
-const PRIVATE_IP_RANGES = [
-  /^10\./,                          // 10.0.0.0/8
-  /^192\.168\./,                    // 192.168.0.0/16
-  /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
-  /^169\.254\./,                    // 169.254.0.0/16 (Link-local)
-  /^127\./,                         // 127.0.0.0/8 (Loopback)
-  /^0\./,                           // 0.0.0.0/8 (Invalid)
-];
+// Re-export types and function for backward compatibility
+export { SecurityMode, validateUrlSync };
 
 export class SSRFProtection {
+  /**
+   * Re-export synchronous validation for convenience
+   */
+  static validateUrlSync = validateUrlSync;
+
   /**
    * Validate webhook URL for SSRF protection with configurable security modes
    *

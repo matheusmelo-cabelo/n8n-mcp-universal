@@ -2,40 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isInstanceContext = isInstanceContext;
 exports.validateInstanceContext = validateInstanceContext;
-function isValidUrl(url) {
-    try {
-        const parsed = new URL(url);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            return false;
-        }
-        if (!parsed.hostname || parsed.hostname.length === 0) {
-            return false;
-        }
-        if (parsed.port && (isNaN(Number(parsed.port)) || Number(parsed.port) < 1 || Number(parsed.port) > 65535)) {
-            return false;
-        }
-        const hostname = parsed.hostname.toLowerCase();
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
-            return true;
-        }
-        const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-        if (ipv4Pattern.test(hostname)) {
-            const parts = hostname.split('.');
-            return parts.every(part => {
-                const num = parseInt(part, 10);
-                return num >= 0 && num <= 255;
-            });
-        }
-        if (hostname.includes(':') || hostname.startsWith('[') && hostname.endsWith(']')) {
-            return true;
-        }
-        const domainPattern = /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/;
-        return domainPattern.test(hostname);
-    }
-    catch {
-        return false;
-    }
-}
+const url_validator_sync_1 = require("../utils/url-validator-sync");
 function isValidApiKey(key) {
     return key.length > 0 &&
         !key.toLowerCase().includes('your_api_key') &&
@@ -46,7 +13,7 @@ function isInstanceContext(obj) {
     if (!obj || typeof obj !== 'object')
         return false;
     const hasValidUrl = obj.n8nApiUrl === undefined ||
-        (typeof obj.n8nApiUrl === 'string' && isValidUrl(obj.n8nApiUrl));
+        (typeof obj.n8nApiUrl === 'string' && (0, url_validator_sync_1.validateUrlSync)(obj.n8nApiUrl, 'permissive').valid);
     const hasValidKey = obj.n8nApiKey === undefined ||
         (typeof obj.n8nApiKey === 'string' && isValidApiKey(obj.n8nApiKey));
     const hasValidTimeout = obj.n8nApiTimeout === undefined ||
@@ -66,15 +33,11 @@ function validateInstanceContext(context) {
         if (context.n8nApiUrl === '') {
             errors.push(`Invalid n8nApiUrl: empty string - URL is required when field is provided`);
         }
-        else if (!isValidUrl(context.n8nApiUrl)) {
-            try {
-                const parsed = new URL(context.n8nApiUrl);
-                if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-                    errors.push(`Invalid n8nApiUrl: URL must use HTTP or HTTPS protocol, got ${parsed.protocol}`);
-                }
-            }
-            catch {
-                errors.push(`Invalid n8nApiUrl: URL format is malformed or incomplete`);
+        else {
+            const mode = (process.env.N8N_API_SECURITY_MODE || 'permissive');
+            const validation = (0, url_validator_sync_1.validateUrlSync)(context.n8nApiUrl, mode);
+            if (!validation.valid) {
+                errors.push(`Invalid n8nApiUrl: ${validation.reason || 'Invalid URL'}`);
             }
         }
     }

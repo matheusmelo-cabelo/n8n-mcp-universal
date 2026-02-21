@@ -1,32 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SSRFProtection = void 0;
+exports.SSRFProtection = exports.validateUrlSync = void 0;
 const url_1 = require("url");
 const promises_1 = require("dns/promises");
 const logger_1 = require("./logger");
-const CLOUD_METADATA = new Set([
-    '169.254.169.254',
-    '169.254.170.2',
-    'metadata.google.internal',
-    'metadata',
-    '100.100.100.200',
-    '192.0.0.192',
-]);
-const LOCALHOST_PATTERNS = new Set([
-    'localhost',
-    '127.0.0.1',
-    '::1',
-    '0.0.0.0',
-    'localhost.localdomain',
-]);
-const PRIVATE_IP_RANGES = [
-    /^10\./,
-    /^192\.168\./,
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
-    /^169\.254\./,
-    /^127\./,
-    /^0\./,
-];
+const url_validator_sync_1 = require("./url-validator-sync");
+Object.defineProperty(exports, "validateUrlSync", { enumerable: true, get: function () { return url_validator_sync_1.validateUrlSync; } });
 class SSRFProtection {
     static async validateWebhookUrl(urlString) {
         try {
@@ -39,7 +18,7 @@ class SSRFProtection {
             if (hostname.startsWith('[') && hostname.endsWith(']')) {
                 hostname = hostname.slice(1, -1);
             }
-            if (CLOUD_METADATA.has(hostname)) {
+            if (url_validator_sync_1.CLOUD_METADATA.has(hostname)) {
                 logger_1.logger.warn('SSRF blocked: Cloud metadata endpoint', { hostname, mode });
                 return { valid: false, reason: 'Cloud metadata endpoint blocked' };
             }
@@ -56,7 +35,7 @@ class SSRFProtection {
                 });
                 return { valid: false, reason: 'DNS resolution failed' };
             }
-            if (CLOUD_METADATA.has(resolvedIP)) {
+            if (url_validator_sync_1.CLOUD_METADATA.has(resolvedIP)) {
                 logger_1.logger.warn('SSRF blocked: Hostname resolves to cloud metadata IP', {
                     hostname,
                     resolvedIP,
@@ -71,7 +50,7 @@ class SSRFProtection {
                 });
                 return { valid: true };
             }
-            const isLocalhost = LOCALHOST_PATTERNS.has(hostname) ||
+            const isLocalhost = url_validator_sync_1.LOCALHOST_PATTERNS.has(hostname) ||
                 resolvedIP === '::1' ||
                 resolvedIP.startsWith('127.');
             if (mode === 'strict' && isLocalhost) {
@@ -85,7 +64,7 @@ class SSRFProtection {
                 logger_1.logger.info('Localhost webhook allowed (moderate mode)', { hostname, resolvedIP });
                 return { valid: true };
             }
-            if (PRIVATE_IP_RANGES.some(regex => regex.test(resolvedIP))) {
+            if (url_validator_sync_1.PRIVATE_IP_RANGES.some(regex => regex.test(resolvedIP))) {
                 logger_1.logger.warn('SSRF blocked: Private IP address', { hostname, resolvedIP, mode });
                 return {
                     valid: false,
@@ -115,4 +94,5 @@ class SSRFProtection {
     }
 }
 exports.SSRFProtection = SSRFProtection;
+SSRFProtection.validateUrlSync = url_validator_sync_1.validateUrlSync;
 //# sourceMappingURL=ssrf-protection.js.map
